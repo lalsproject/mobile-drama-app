@@ -17,9 +17,12 @@ const MainLayout = () => {
   );
 };
 
+import { InstallPWA } from './components/InstallPWA';
+
 const App: React.FC = () => {
   return (
     <Router>
+      <InstallPWA />
       <Routes>
         <Route element={<MainLayout />}>
           <Route path="/" element={<Home />} />
