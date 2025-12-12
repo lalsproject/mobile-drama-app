@@ -33,12 +33,18 @@ export const Trending: React.FC = () => {
       } else {
         setDramas(prev => [...prev, ...list]);
       }
-    } catch (error) {
-      console.error(error);
-      if (currentPage === 1) setError(true);
-    } finally {
+
       setLoading(false);
       setLoadingMore(false);
+    } catch (error) {
+      console.error(error);
+
+      console.log(`Page ${currentPage} failed, skipping to ${currentPage + 1}...`);
+
+      setTimeout(() => {
+        setPage(currentPage + 1);
+        loadData(currentPage + 1);
+      }, 500);
     }
   };
 
@@ -70,7 +76,7 @@ export const Trending: React.FC = () => {
       ) : error ? (
         <div className="flex flex-col items-center justify-center h-[50vh] text-gray-400 gap-4">
           <p>Failed to load rankings</p>
-          <button 
+          <button
             onClick={() => loadData(1)}
             className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-full text-sm font-medium hover:bg-red-700 transition"
           >
@@ -80,16 +86,16 @@ export const Trending: React.FC = () => {
       ) : (
         <div className="flex flex-col gap-4">
           {dramas.map((drama, index) => (
-            <div 
-              key={`${drama.bookId}-${index}`} 
+            <div
+              key={`${drama.bookId}-${index}`}
               className="flex gap-4 p-3 bg-gray-900/50 rounded-lg active:bg-gray-800 transition-colors cursor-pointer"
               onClick={() => handleDramaClick(drama)}
             >
               <div className="relative w-24 flex-shrink-0 aspect-[2/3]">
-                <img 
-                  src={drama.cover || drama.coverWap} 
-                  className="w-full h-full object-cover rounded-md" 
-                  alt={drama.bookName} 
+                <img
+                  src={drama.cover || drama.coverWap}
+                  className="w-full h-full object-cover rounded-md"
+                  alt={drama.bookName}
                 />
                 <div className={`absolute -top-1 -left-1 w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold ${index < 3 ? 'bg-yellow-500 text-black' : 'bg-gray-700 text-white'}`}>
                   {index + 1}
@@ -106,7 +112,7 @@ export const Trending: React.FC = () => {
                 </div>
                 <p className="text-xs text-gray-500 line-clamp-2">{drama.introduction || 'No description available.'}</p>
                 {drama.playCount && (
-                    <p className="text-[10px] text-red-500 mt-2 font-medium">{drama.playCount} Plays</p>
+                  <p className="text-[10px] text-red-500 mt-2 font-medium">{drama.playCount} Plays</p>
                 )}
               </div>
             </div>
@@ -115,7 +121,7 @@ export const Trending: React.FC = () => {
           {/* Load More Button */}
           {dramas.length > 0 && hasMore && (
             <div className="mt-4 flex justify-center">
-              <button 
+              <button
                 onClick={handleLoadMore}
                 disabled={loadingMore}
                 className="w-full py-3 bg-gray-900 text-gray-400 rounded-lg text-sm font-medium flex justify-center items-center gap-2 hover:bg-gray-800 active:scale-95 transition-all"

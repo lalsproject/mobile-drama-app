@@ -3,64 +3,63 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 import { Drama } from '../types';
 import { DramaCard } from '../components/DramaCard';
-import { Loader2, Plus, RefreshCw } from 'lucide-react';
+import { Loader2, RefreshCw } from 'lucide-react';
 
 export const Home: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'foryou' | 'new'>('foryou');
   const [dramas, setDramas] = useState<Drama[]>([]);
   const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState(false);
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
   const navigate = useNavigate();
 
-  const loadData = async (currentPage: number, isNewTab: boolean = false) => {
-    if (currentPage === 1) {
-      setLoading(true);
-      setError(false);
-    } else {
-      setLoadingMore(true);
-    }
+  const loadData = async (isNewTab: boolean = false) => {
+    setLoading(true);
+    setError(false);
 
     try {
       let res;
       if (activeTab === 'foryou') {
-        res = await api.getForYou(currentPage);
+        res = await api.getForYou();
       } else {
-        res = await api.getNewReleases(currentPage);
+        res = await api.getNewReleases();
       }
-      
-      const list = res.data?.list || [];
-      const isMore = res.data?.isMore ?? (list.length > 0);
-      setHasMore(isMore);
 
-      if (currentPage === 1) {
-        setDramas(list);
-      } else {
-        setDramas(prev => [...prev, ...list]);
+      // API baru mengembalikan array langsung
+      let list: Drama[] = [];
+
+      if (Array.isArray(res)) {
+        // Jika response langsung berupa array
+        list = res;
+      } else if (res.data?.list) {
+        // Fallback untuk format lama
+        list = res.data.list;
       }
+
+      // Proses data berdasarkan struktur API baru
+      const processedList = list.map((item: any) => {
+        // Cek apakah ini tagCard format
+        if (item.cardType === 3 && item.tagCardVo) {
+          // Ambil drama dari tagCardVo.tagBooks
+          return item.tagCardVo.tagBooks || [];
+        }
+        // Atau drama biasa
+        return item;
+      }).flat(); // Flatten array jika ada nested arrays
+
+      setDramas(processedList);
+      setLoading(false);
     } catch (error) {
       console.error("Home Load Error:", error);
-      if (currentPage === 1) setError(true);
-    } finally {
+      setError(true);
       setLoading(false);
-      setLoadingMore(false);
     }
   };
 
   useEffect(() => {
-    setPage(1);
     setDramas([]);
-    loadData(1, true);
+    loadData(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
-
-  const handleLoadMore = () => {
-    const nextPage = page + 1;
-    setPage(nextPage);
-    loadData(nextPage);
-  };
 
   const handleDramaClick = (drama: Drama) => {
     navigate(`/play/${drama.bookId}`, { state: { drama } });
@@ -72,13 +71,13 @@ export const Home: React.FC = () => {
       <div className="flex items-center gap-6 mb-6 sticky top-0 z-10 bg-[#0f0f0f]/95 py-2 backdrop-blur-sm">
         <h1 className="text-2xl font-black text-red-600 tracking-tighter">DRAMABOX</h1>
         <div className="flex gap-4">
-          <button 
+          <button
             onClick={() => setActiveTab('foryou')}
             className={`text-sm font-semibold transition-colors ${activeTab === 'foryou' ? 'text-white border-b-2 border-red-500' : 'text-gray-500'}`}
           >
             For You
           </button>
-          <button 
+          <button
             onClick={() => setActiveTab('new')}
             className={`text-sm font-semibold transition-colors ${activeTab === 'new' ? 'text-white border-b-2 border-red-500' : 'text-gray-500'}`}
           >
@@ -95,8 +94,8 @@ export const Home: React.FC = () => {
       ) : error ? (
         <div className="flex flex-col items-center justify-center h-[50vh] text-gray-400 gap-4">
           <p>Unable to load dramas</p>
-          <button 
-            onClick={() => loadData(1)}
+          <button
+            onClick={() => loadData()}
             className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-full text-sm font-medium hover:bg-red-700 transition"
           >
             <RefreshCw size={16} /> Retry
@@ -106,27 +105,15 @@ export const Home: React.FC = () => {
         <>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {dramas.map((drama, index) => (
-              <DramaCard 
-                key={`${drama.bookId}-${index}`} 
-                drama={drama} 
-                onClick={handleDramaClick} 
+              <DramaCard
+                key={`${drama.bookId}-${index}`}
+                drama={drama}
+                onClick={handleDramaClick}
               />
             ))}
           </div>
 
-          {/* Load More */}
-          {dramas.length > 0 && hasMore && (
-            <div className="mt-8 flex justify-center">
-              <button 
-                onClick={handleLoadMore}
-                disabled={loadingMore}
-                className="bg-gray-800 text-white px-6 py-2 rounded-full text-sm font-medium flex items-center gap-2 hover:bg-gray-700 disabled:opacity-50"
-              >
-                {loadingMore ? <Loader2 className="animate-spin" size={16} /> : <Plus size={16} />}
-                Load More
-              </button>
-            </div>
-          )}
+          {/* Load More tidak diperlukan karena API baru mengembalikan semua data sekaligus */}
         </>
       )}
     </div>

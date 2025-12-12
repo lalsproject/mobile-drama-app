@@ -10,8 +10,11 @@ export const Search: React.FC = () => {
   const [results, setResults] = useState<Drama[]>([]);
   const [suggestions, setSuggestions] = useState<Drama[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
   const navigate = useNavigate();
 
   // Debounced suggestion fetch
@@ -20,7 +23,6 @@ export const Search: React.FC = () => {
       if (query.trim().length > 1 && !hasSearched) {
         try {
           const res = await api.getSuggestions(query);
-          // Suggestion API returns data.suggestList as Drama[]
           if (res.data && Array.isArray(res.data.suggestList)) {
             setSuggestions(res.data.suggestList);
             setShowSuggestions(true);
@@ -37,39 +39,60 @@ export const Search: React.FC = () => {
     return () => clearTimeout(delayDebounceFn);
   }, [query, hasSearched]);
 
-  const performSearch = async (keyword: string) => {
+  const loadData = async (keyword: string, currentPage: number) => {
     if (!keyword.trim()) return;
-    
-    setLoading(true);
-    setHasSearched(true);
-    setShowSuggestions(false);
-    setSuggestions([]);
-    
+
+    if (currentPage === 1) {
+      setLoading(true);
+      setHasSearched(true);
+      setShowSuggestions(false);
+      setSuggestions([]);
+    } else {
+      setLoadingMore(true);
+    }
+
     try {
-      const res = await api.search(keyword);
-      // Search API returns data.list as Drama[]
-      if (res.data && Array.isArray(res.data.list)) {
-        setResults(res.data.list);
+      const res = await api.search(keyword, currentPage);
+      const list = res.data?.list || [];
+      const isMore = res.data?.isMore ?? (list.length > 0);
+      setHasMore(isMore);
+
+      if (currentPage === 1) {
+        setResults(list);
       } else {
-        setResults([]);
+        setResults(prev => [...prev, ...list]);
       }
+
+      setLoading(false);
+      setLoadingMore(false);
     } catch (error) {
       console.error(error);
-    } finally {
-      setLoading(false);
+
+      console.log(`Page ${currentPage} failed, skipping to ${currentPage + 1}...`);
+
+      setTimeout(() => {
+        setPage(currentPage + 1);
+        loadData(keyword, currentPage + 1);
+      }, 500);
     }
   };
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    performSearch(query);
+    setPage(1);
+    loadData(query, 1);
+  };
+
+  const handleLoadMore = () => {
+    const nextPage = page + 1;
+    setPage(nextPage);
+    loadData(query, nextPage);
   };
 
   const handleSuggestionClick = (drama: Drama) => {
-    // Navigate directly to player since we have the object
     navigate(`/play/${drama.bookId}`, { state: { drama } });
   };
-  
+
   const handleDramaClick = (drama: Drama) => {
     navigate(`/play/${drama.bookId}`, { state: { drama } });
   };
@@ -80,6 +103,8 @@ export const Search: React.FC = () => {
     setHasSearched(false);
     setSuggestions([]);
     setShowSuggestions(false);
+    setPage(1);
+    setHasMore(true);
   };
 
   return (
@@ -91,7 +116,7 @@ export const Search: React.FC = () => {
             value={query}
             onChange={(e) => {
               setQuery(e.target.value);
-              setHasSearched(false); 
+              setHasSearched(false);
             }}
             placeholder="Search drama, genre..."
             className="w-full bg-gray-800 text-white pl-10 pr-10 py-3 rounded-full outline-none focus:ring-2 focus:ring-red-500/50 transition-all placeholder:text-gray-500"
@@ -99,8 +124,8 @@ export const Search: React.FC = () => {
           />
           <SearchIcon className="absolute left-3.5 top-3.5 text-gray-400" size={20} />
           {query && (
-            <button 
-              type="button" 
+            <button
+              type="button"
               onClick={clearSearch}
               className="absolute right-3 top-3 p-0.5 bg-gray-700 rounded-full"
             >
@@ -120,11 +145,11 @@ export const Search: React.FC = () => {
               className="w-full text-left px-4 py-2 border-b border-gray-700/50 last:border-0 hover:bg-gray-700 flex items-center gap-3 text-sm text-gray-200"
             >
               <div className="w-8 h-12 bg-gray-900 rounded overflow-hidden flex-shrink-0">
-                  <img src={drama.cover} alt="" className="w-full h-full object-cover" />
+                <img src={drama.cover} alt="" className="w-full h-full object-cover" />
               </div>
               <div className="flex-1">
-                 <p className="font-medium line-clamp-1">{drama.bookName}</p>
-                 <p className="text-xs text-gray-500 line-clamp-1">{drama.introduction}</p>
+                <p className="font-medium line-clamp-1">{drama.bookName}</p>
+                <p className="text-xs text-gray-500 line-clamp-1">{drama.introduction}</p>
               </div>
             </button>
           ))}
@@ -138,26 +163,42 @@ export const Search: React.FC = () => {
       ) : (
         <>
           {hasSearched ? (
-             results.length === 0 ? (
+            results.length === 0 ? (
               <div className="text-center text-gray-500 mt-20">
                 <p>No results found for "{query}"</p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mt-4">
-                {results.map((drama) => (
-                  <DramaCard 
-                    key={drama.bookId} 
-                    drama={drama} 
-                    onClick={handleDramaClick} 
-                  />
-                ))}
-              </div>
+              <>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mt-4">
+                  {results.map((drama, index) => (
+                    <DramaCard
+                      key={`${drama.bookId}-${index}`}
+                      drama={drama}
+                      onClick={handleDramaClick}
+                    />
+                  ))}
+                </div>
+
+                {/* Load More */}
+                {results.length > 0 && hasMore && (
+                  <div className="mt-8 flex justify-center">
+                    <button
+                      onClick={handleLoadMore}
+                      disabled={loadingMore}
+                      className="bg-gray-800 text-white px-6 py-2 rounded-full text-sm font-medium flex items-center gap-2 hover:bg-gray-700 disabled:opacity-50"
+                    >
+                      {loadingMore ? <Loader2 className="animate-spin" size={16} /> : <Loader2 size={16} className="opacity-0" />} {/* Icon placeholder */}
+                      Load More
+                    </button>
+                  </div>
+                )}
+              </>
             )
           ) : (
             !query && (
               <div className="mt-8 text-gray-500 flex flex-col items-center">
-                 <SearchIcon size={48} className="opacity-20 mb-4" />
-                 <p className="text-sm">Explore thousands of dramas</p>
+                <SearchIcon size={48} className="opacity-20 mb-4" />
+                <p className="text-sm">Explore thousands of dramas</p>
               </div>
             )
           )}
